@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inference
+  template:
+    metadata:
+      labels:
+        app: inference
+    spec:
+      containers:
+      - name: inference
+        image: mylab2:latest
+        imagePullPolicy: Never
+        env:
+        - name: MODEL_PATH
+          value: "/models/MYpipeline.pkl"
+        - name: KEYCLOAK_URL
+          value: "https://keycloak-service:8443"
+        - name: CLIENT_ID
+          value: "appClient"
+        - name: CLIENT_SECRET
+          value: "2LKDC0jfhLaIq5PUY2m96pFzMA2VwEBW"
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - mountPath: /models
+          name: config-volume
+          readOnly: true
+      volumes:
+      - name: config-volume
+        configMap:
+          name: my-configmap
+          
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8888
+    targetPort: 8000
+  selector:
+    app: inference
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-node-service
+spec:
+  selector:
+    app: inference
+  type: NodePort
+  ports:
+  - name: common-inf
+    port: 8888
+    targetPort: 8000
+    nodePort: 31223

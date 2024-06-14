@@ -1,0 +1,163 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+      
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+type: Opaque
+data:
+  password: bXlIYXJkUGFzczAwNw==
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15.2
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: pgdata
+      volumes:
+      - name: pgdata
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+  selector:
+    app: postgres
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: keycloak-secret
+type: Opaque
+data:
+  password: YWRtaW4wMDc=
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+      - name: keycloak
+        image: mykeycloak:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: KEYCLOAK_ADMIN
+          value: admin
+        - name: KEYCLOAK_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: keycloak-secret
+              key: password
+        command: ["start --optimized --db-password=myHardPass007"]
+        ports:
+        - containerPort: 8443
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8443
+    targetPort: 8443
+  selector:
+    app: keycloak
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inference
+  template:
+    metadata:
+      labels:
+        app: inference
+    spec:
+      containers:
+      - name: inference
+        image: mylab2:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: MODEL_PATH
+          value: "/models/MYpipeline.pkl"
+        - name: KEYCLOAK_URL
+          value: "https://keycloak:8443"
+        - name: CLIENT_ID
+          value: "bibki"
+        - name: CLIENT_SECRET
+          value: "pipki"
+        ports:
+        - containerPort: 8000
+        volumeMounts:
+        - mountPath: /models
+          name: models-volume
+      volumes:
+      - name: models-volume
+        hostPath:
+          path: /home/zuga/Desktop/lab3/CloudCS-Lab3/models
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8888
+    targetPort: 8000
+  selector:
+    app: inference
